@@ -35,10 +35,10 @@ interface PendingConfirm {
 }
 
 const QUICK_ACTIONS = [
-    { label: '시설 현황', icon: HiOutlineBuildingOffice2, msg: '시설 목록 보여줘' },
-    { label: '예약 현황', icon: HiOutlineCalendarDays, msg: '예약 현황 조회' },
-    { label: '병원 검색', icon: HiOutlineBeaker, msg: '내과 병원 검색해줘' },
-    { label: '장소 검색', icon: HiOutlineMapPin, msg: '코엑스 장소 검색해줘' },
+    { label: '주변 추천', icon: HiOutlineMapPin, msg: '주변에 뭐가 있어?' },
+    { label: '예약 현황', icon: HiOutlineCalendarDays, msg: '내 예약 보여줘' },
+    { label: '날씨', icon: HiOutlineBeaker, msg: '오늘 날씨 어때?' },
+    { label: '병원 검색', icon: HiOutlineBuildingOffice2, msg: '내과 병원 찾아줘' },
 ];
 
 let msgIdCounter = 0;
@@ -55,6 +55,7 @@ export default function AIChatWidget() {
     const [isLoading, setIsLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+    const [userLocation, setUserLocation] = useState<import('@/lib/locationService').UserLocation | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -70,6 +71,17 @@ export default function AIChatWidget() {
     useEffect(() => {
         if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
     }, [isOpen]);
+
+    // Request location when chat opens
+    useEffect(() => {
+        if (isOpen && !userLocation) {
+            import('@/lib/locationService').then(({ getUserLocation }) => {
+                getUserLocation()
+                    .then(loc => setUserLocation(loc))
+                    .catch(() => {}); // silently ignore
+            });
+        }
+    }, [isOpen, userLocation]);
 
     // 모바일에서 열릴 때 body 스크롤 잠금
     useEffect(() => {
@@ -99,7 +111,7 @@ export default function AIChatWidget() {
         setMessages(prev => [...prev, createMsg('user', userMsg)]);
         setIsLoading(true);
         try {
-            const context = buildContext();
+            const context = { ...buildContext(), userLocation };
             const intent = detectIntent(userMsg);
 
             // Destructive actions need confirmation
