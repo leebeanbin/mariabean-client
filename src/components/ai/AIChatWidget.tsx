@@ -6,23 +6,38 @@ import {
     HiOutlineXMark, HiOutlinePaperAirplane,
     HiOutlineBuildingOffice2, HiOutlineCalendarDays,
     HiOutlineMapPin, HiOutlineTrash, HiOutlineSparkles,
-    HiOutlineArrowPath,
+    HiOutlineArrowPath, HiOutlineBeaker,
 } from 'react-icons/hi2';
-import api from '@/lib/api';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import AgentActionConfirm from './AgentActionConfirm';
+import {
+    AGENT_ACTIONS,
+    detectIntent,
+    runAction,
+    buildContext,
+    getFallbackMessage,
+    getCancelReservationId,
+    executeCancelReservation,
+} from '@/lib/agentActions';
 
 interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
+    streaming?: boolean;
 }
 
-const FACILITY_CATEGORIES = ['HOSPITAL', 'OFFICE', 'COMMUNITY', 'SPORTS', 'LIBRARY', 'OTHER'] as const;
+interface PendingConfirm {
+    action: string;
+    details: string;
+    onConfirm: () => Promise<void>;
+}
 
 const QUICK_ACTIONS = [
     { label: '시설 현황', icon: HiOutlineBuildingOffice2, msg: '시설 목록 보여줘' },
     { label: '예약 현황', icon: HiOutlineCalendarDays, msg: '예약 현황 조회' },
+    { label: '병원 검색', icon: HiOutlineBeaker, msg: '내과 병원 검색해줘' },
     { label: '장소 검색', icon: HiOutlineMapPin, msg: '코엑스 장소 검색해줘' },
 ];
 
@@ -39,6 +54,7 @@ export default function AIChatWidget() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -65,22 +81,60 @@ export default function AIChatWidget() {
         return () => { document.body.style.overflow = ''; };
     }, [isMobile, isOpen]);
 
+    const streamAssistantMessage = useCallback((text: string) => {
+        const id = `msg-${++msgIdCounter}`;
+        setMessages(prev => [...prev, { id, role: 'assistant', content: '', timestamp: new Date(), streaming: true }]);
+        let i = 0;
+        const interval = setInterval(() => {
+            i += 3;
+            setMessages(prev => prev.map(m => m.id === id ? { ...m, content: text.slice(0, i), streaming: i < text.length } : m));
+            if (i >= text.length) clearInterval(interval);
+        }, 18);
+    }, []);
+
     const handleSend = useCallback(async (text?: string) => {
         const userMsg = (text ?? input).trim();
         if (!userMsg || isLoading) return;
         setInput('');
-        const userMessage = createMsg('user', userMsg);
-        setMessages(prev => [...prev, userMessage]);
+        setMessages(prev => [...prev, createMsg('user', userMsg)]);
         setIsLoading(true);
         try {
-            const response = await processUserMessage(userMsg);
-            setMessages(prev => [...prev, createMsg('assistant', response)]);
+            const context = buildContext();
+            const intent = detectIntent(userMsg);
+
+            // Destructive actions need confirmation
+            if (intent === AGENT_ACTIONS.CANCEL_RESERVATION) {
+                const id = getCancelReservationId(userMsg);
+                if (!id) {
+                    streamAssistantMessage('취소할 예약 번호를 알려주세요.\n예시: "예약 3번 취소해줘"');
+                } else {
+                    setPendingConfirm({
+                        action: '예약 취소',
+                        details: `예약 #${id}을 취소하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+                        onConfirm: async () => {
+                            setPendingConfirm(null);
+                            setIsLoading(true);
+                            const result = await executeCancelReservation(id);
+                            streamAssistantMessage(result);
+                            setIsLoading(false);
+                        },
+                    });
+                }
+                return;
+            }
+
+            if (intent) {
+                const response = await runAction(intent, userMsg, context);
+                streamAssistantMessage(response);
+            } else {
+                streamAssistantMessage(getFallbackMessage(context));
+            }
         } catch {
             setMessages(prev => [...prev, createMsg('assistant', '요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.')]);
         } finally {
             setIsLoading(false);
         }
-    }, [input, isLoading]);
+    }, [input, isLoading, streamAssistantMessage]);
 
     const clearChat = () => {
         setMessages([createMsg('assistant', '대화가 초기화되었습니다. 무엇을 도와드릴까요?')]);
@@ -178,6 +232,18 @@ export default function AIChatWidget() {
                         </div>
                     </div>
                 ))}
+
+                {pendingConfirm && (
+                    <AgentActionConfirm
+                        action={pendingConfirm.action}
+                        details={pendingConfirm.details}
+                        onConfirm={pendingConfirm.onConfirm}
+                        onCancel={() => {
+                            setPendingConfirm(null);
+                            streamAssistantMessage('취소 요청을 중단했습니다.');
+                        }}
+                    />
+                )}
 
                 {isLoading && (
                     <div className="flex gap-2.5">
@@ -399,87 +465,3 @@ function formatTime(date: Date): string {
     return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-// ── API logic ──
-
-async function processUserMessage(msg: string): Promise<string> {
-    if (msg.includes('시설') && (msg.includes('목록') || msg.includes('조회') || msg.includes('보여') || msg.includes('현황'))) {
-        return handleFacilityList(msg);
-    }
-    if (msg.includes('예약') && (msg.includes('목록') || msg.includes('조회') || msg.includes('현황') || msg.includes('보여'))) {
-        return handleReservationList();
-    }
-    if (msg.includes('예약') && msg.includes('취소')) {
-        return handleReservationCancel(msg);
-    }
-    if (msg.includes('장소') && msg.includes('검색')) {
-        return handlePlaceSearch(msg);
-    }
-    return `이런 요청을 도와드릴 수 있어요:\n\n• 시설 목록 보여줘\n• 예약 현황 조회\n• 예약 3번 취소해줘\n• 코엑스 장소 검색해줘\n\n무엇을 도와드릴까요?`;
-}
-
-async function handleFacilityList(msg: string): Promise<string> {
-            try {
-                const category = extractCategory(msg);
-        let facilities: { name: string; category: string; address?: string }[] = [];
-        let totalElements = 0;
-        if (category) {
-            const { data } = await api.get('/api/v1/facilities', { params: { page: 0, size: 5, category } });
-            facilities = data.data?.content ?? [];
-            totalElements = data.data?.totalElements ?? 0;
-        } else {
-            const responses = await Promise.all(
-                FACILITY_CATEGORIES.map(cat => api.get('/api/v1/facilities', { params: { page: 0, size: 2, category: cat } }))
-            );
-            facilities = responses.flatMap(res => res.data.data?.content ?? []).slice(0, 5);
-            totalElements = facilities.length;
-        }
-        if (!facilities.length) return '등록된 시설이 없습니다.';
-        const list = facilities.map((f, i) =>
-                    `${i + 1}. ${f.name} (${f.category})\n   📍 ${f.address || '주소 미등록'}`
-                ).join('\n');
-        return `총 ${totalElements}개 시설 중 최대 5개:\n\n${list}`;
-            } catch { return '시설 목록을 불러오지 못했습니다.'; }
-        }
-
-async function handleReservationList(): Promise<string> {
-            try {
-        const { data } = await api.get('/api/v1/reservations', { params: { page: 0, size: 5, sort: 'createdAt,desc' } });
-                const rd = data.data;
-                if (!rd?.content?.length) return '예약 내역이 없습니다.';
-                const list = rd.content.map((r: { id: number; facilityId: string; status: string; startTime: string }, i: number) =>
-                    `${i + 1}. #${String(r.id).padStart(4, '0')} · ${r.facilityId} · ${r.status}\n   🕐 ${r.startTime.replace('T', ' ').substring(0, 16)}`
-                ).join('\n');
-                return `최근 예약 ${rd.totalElements}건:\n\n${list}`;
-            } catch { return '예약 목록을 불러오지 못했습니다.'; }
-        }
-
-async function handleReservationCancel(msg: string): Promise<string> {
-            const idMatch = msg.match(/(\d+)/);
-            if (!idMatch) return '취소할 예약 번호를 알려주세요.\n예시: "예약 1번 취소해줘"';
-            try {
-                await api.post(`/api/v1/reservations/${idMatch[1]}/cancel`);
-                return `✅ 예약 #${idMatch[1]}이 취소되었습니다.`;
-            } catch { return `예약 #${idMatch[1]} 취소에 실패했습니다.`; }
-        }
-
-async function handlePlaceSearch(msg: string): Promise<string> {
-            const query = msg.replace(/장소|검색|해줘|해/g, '').trim();
-            if (!query) return '검색할 장소명을 알려주세요.\n예시: "코엑스 장소 검색해줘"';
-            try {
-                const { data } = await api.get('/api/v1/facilities/places/search', { params: { query } });
-                if (!data.data?.length) return `"${query}"에 대한 결과가 없습니다.`;
-                const list = data.data.map((p: { name: string; address: string }, i: number) =>
-                    `${i + 1}. ${p.name}\n   📍 ${p.address}`
-                ).join('\n');
-                return `"${query}" 검색 결과:\n\n${list}`;
-            } catch { return '장소 검색에 실패했습니다.'; }
-        }
-
-function extractCategory(msg: string): string | null {
-        if (msg.includes('의료') || msg.includes('병원')) return 'HOSPITAL';
-        if (msg.includes('사무') || msg.includes('오피스')) return 'OFFICE';
-        if (msg.includes('주민') || msg.includes('커뮤니티')) return 'COMMUNITY';
-        if (msg.includes('체육') || msg.includes('운동')) return 'SPORTS';
-        if (msg.includes('도서관')) return 'LIBRARY';
-        return null;
-}
