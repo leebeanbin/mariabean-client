@@ -1,8 +1,7 @@
 import axios from 'axios';
+import { useAuthStore } from '@/store/authStore';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const IS_DEV_AUTH_BYPASS = process.env.NODE_ENV === 'development'
-    || process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -48,7 +47,7 @@ function clearAuthAndRedirect(requestUrl?: string) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
 
-    if (typeof window !== 'undefined' && !IS_DEV_AUTH_BYPASS) {
+    if (typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (isPublicPath(currentPath)) return;
 
@@ -107,6 +106,7 @@ api.interceptors.response.use(
             });
             const { accessToken } = res.data.data;
             localStorage.setItem('accessToken', accessToken);
+            useAuthStore.setState({ accessToken });
             processQueue(null, accessToken);
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
             return api(originalRequest);

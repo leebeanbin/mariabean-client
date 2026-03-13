@@ -10,6 +10,13 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
     }
 }
 
+function isTokenExpired(token: string): boolean {
+    const payload = decodeJwtPayload(token);
+    const exp = payload.exp;
+    if (typeof exp !== 'number') return true;
+    return exp * 1000 < Date.now();
+}
+
 function extractRole(token: string): string | null {
     const payload = decodeJwtPayload(token);
     // Spring Security typically uses 'role' or 'roles' or 'authorities'
@@ -20,6 +27,7 @@ function extractRole(token: string): string | null {
 
 interface AuthState {
     isAuthenticated: boolean;
+    isHydrated: boolean;
     accessToken: string | null;
     userEmail: string | null;
     memberId: number | null;
@@ -32,6 +40,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
     isAuthenticated: false,
+    isHydrated: false,
     accessToken: null,
     userEmail: null,
     memberId: null,
@@ -70,15 +79,24 @@ export const useAuthStore = create<AuthState>((set) => ({
     hydrate: () => {
         if (typeof window !== 'undefined') {
             const token = localStorage.getItem('accessToken');
-            if (token) {
+            if (token && !isTokenExpired(token)) {
                 const userRole = extractRole(token);
                 set({
                     isAuthenticated: true,
+                    isHydrated: true,
                     accessToken: token,
                     userRole,
                     isAdmin: userRole === 'ROLE_ADMIN' || userRole === 'ADMIN',
                 });
+            } else {
+                if (token) {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                }
+                set({ isHydrated: true });
             }
+        } else {
+            set({ isHydrated: true });
         }
     },
 }));

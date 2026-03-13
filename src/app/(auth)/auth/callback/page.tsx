@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 
 function Spinner() {
@@ -17,28 +17,38 @@ function Spinner() {
     );
 }
 
+function parseHash(): Record<string, string> {
+    if (typeof window === 'undefined') return {};
+    const hash = window.location.hash.slice(1); // remove leading '#'
+    return Object.fromEntries(new URLSearchParams(hash));
+}
+
 function OAuthCallbackInner() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { login } = useAuthStore();
 
     useEffect(() => {
-        const accessToken = searchParams.get('accessToken') ?? searchParams.get('token');
-        const refreshToken = searchParams.get('refreshToken') ?? searchParams.get('refresh');
-        const email = searchParams.get('email');
-        const memberIdRaw = searchParams.get('memberId');
+        const params = parseHash();
+        const accessToken = params['accessToken'];
+        const refreshToken = params['refreshToken'];
+        const memberIdRaw = params['memberId'];
         const memberId = memberIdRaw ? Number(memberIdRaw) : undefined;
-        const returnUrlParam = searchParams.get('returnUrl');
+
         const returnUrlFromSession = typeof window !== 'undefined'
             ? sessionStorage.getItem('postLoginRedirect')
             : null;
-        const redirectTargetRaw = returnUrlParam || returnUrlFromSession || '/';
+        const redirectTargetRaw = returnUrlFromSession || '/';
         const redirectTarget = redirectTargetRaw.startsWith('/') && !redirectTargetRaw.startsWith('//')
             ? redirectTargetRaw
             : '/';
 
+        // Clear hash from browser history to avoid token exposure in back-navigation
+        if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+
         if (accessToken && refreshToken) {
-            login(accessToken, refreshToken, email || undefined, Number.isFinite(memberId) ? memberId : undefined);
+            login(accessToken, refreshToken, undefined, Number.isFinite(memberId) ? memberId : undefined);
             if (typeof window !== 'undefined') {
                 sessionStorage.removeItem('postLoginRedirect');
             }
@@ -49,7 +59,7 @@ function OAuthCallbackInner() {
             }
             router.replace('/login');
         }
-    }, [searchParams, login, router]);
+    }, [login, router]);
 
     return (
         <div
@@ -72,19 +82,5 @@ function OAuthCallbackInner() {
 }
 
 export default function OAuthCallbackPage() {
-    return (
-        <Suspense fallback={
-            <div
-                className="min-h-screen flex flex-col items-center justify-center gap-4"
-                style={{ background: '#F4F4F5' }}
-            >
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: '#5E6AD2' }}>
-                    <span className="text-xl font-bold text-white">M</span>
-                </div>
-                <Spinner />
-            </div>
-        }>
-            <OAuthCallbackInner />
-        </Suspense>
-    );
+    return <OAuthCallbackInner />;
 }

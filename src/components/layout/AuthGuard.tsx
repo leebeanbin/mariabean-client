@@ -5,22 +5,21 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-    const { hydrate, isAuthenticated } = useAuthStore();
+    const { hydrate, isAuthenticated, isHydrated } = useAuthStore();
     const router = useRouter();
-    const isDevBypass =
-        process.env.NODE_ENV === 'development' ||
-        process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
+    const isDevBypass = process.env.NODE_ENV === 'development';
 
     useEffect(() => {
         hydrate();
     }, [hydrate]);
 
     useEffect(() => {
-        if (!isDevBypass && !isAuthenticated) {
+        if (isHydrated && !isDevBypass && !isAuthenticated) {
             router.replace('/login');
         }
-    }, [isAuthenticated, isDevBypass, router]);
+    }, [isAuthenticated, isHydrated, isDevBypass, router]);
 
+    if (!isHydrated) return <div style={{ minHeight: '100dvh' }} />;
     if (!isDevBypass && !isAuthenticated) return null;
 
     return <>{children}</>;
