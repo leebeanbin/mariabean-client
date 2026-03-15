@@ -6,8 +6,9 @@ import {
     HiOutlineXMark, HiOutlinePaperAirplane,
     HiOutlineBuildingOffice2, HiOutlineCalendarDays,
     HiOutlineMapPin, HiOutlineTrash, HiOutlineSparkles,
-    HiOutlineArrowPath, HiOutlineBeaker,
+    HiOutlineArrowPath, HiOutlineBeaker, HiOutlinePhoto,
 } from 'react-icons/hi2';
+import api from '@/lib/api';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import AgentActionConfirm from './AgentActionConfirm';
 import {
@@ -18,6 +19,8 @@ import {
     getFallbackMessage,
     getCancelReservationId,
     executeCancelReservation,
+    callBeanLLM,
+    type ChatHistoryEntry,
 } from '@/lib/agentActions';
 
 interface Message {
@@ -58,7 +61,16 @@ export default function AIChatWidget() {
     const [userLocation, setUserLocation] = useState<import('@/lib/locationService').UserLocation | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const isMobile = useMediaQuery('(max-width: 1023px)');
+
+    // Build conversation history for multi-turn beanllm context
+    const getChatHistory = useCallback((): ChatHistoryEntry[] => {
+        return messages
+            .filter(m => m.id !== WELCOME_MSG.id && !m.streaming)
+            .slice(-8)
+            .map(m => ({ role: m.role, content: m.content }));
+    }, [messages]);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -104,6 +116,39 @@ export default function AIChatWidget() {
         }, 18);
     }, []);
 
+    const handleImageUpload = useCallback(async (file: File) => {
+        if (!file.type.startsWith('image/')) return;
+        setMessages(prev => [...prev, createMsg('user', `📷 이미지 분석 요청: ${file.name}`)]);
+        setIsLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const lat = userLocation?.lat ?? 37.5665;
+            const lng = userLocation?.lng ?? 126.978;
+            const { data } = await api.post(
+                `/api/v1/search/vision?lat=${lat}&lng=${lng}`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 20000 },
+            );
+            const vision = data?.vision;
+            const results = data?.results;
+            let msg = '';
+            if (vision?.locationDescription) msg += `📍 인식: ${vision.locationDescription}\n`;
+            if (vision?.suggestedQuery) msg += `🔍 검색어: "${vision.suggestedQuery}"\n`;
+            if (results?.results?.length) {
+                msg += `\n검색 결과 ${results.results.length}개:\n`;
+                results.results.slice(0, 3).forEach((r: { name: string; address?: string; rating?: number }, i: number) => {
+                    msg += `${i + 1}. ${r.name}${r.address ? ` — ${r.address}` : ''}${r.rating ? ` ★${r.rating}` : ''}\n`;
+                });
+            }
+            streamAssistantMessage(msg || '이미지를 분석했지만 관련 장소를 찾지 못했습니다.');
+        } catch {
+            streamAssistantMessage('이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [userLocation, streamAssistantMessage]);
+
     const handleSend = useCallback(async (text?: string) => {
         const userMsg = (text ?? input).trim();
         if (!userMsg || isLoading) return;
@@ -114,7 +159,7 @@ export default function AIChatWidget() {
             const context = { ...buildContext(), userLocation };
             const intent = detectIntent(userMsg);
 
-            // Destructive actions need confirmation
+            // Destructive actions need confirmation first (safety gate)
             if (intent === AGENT_ACTIONS.CANCEL_RESERVATION) {
                 const id = getCancelReservationId(userMsg);
                 if (!id) {
@@ -135,18 +180,24 @@ export default function AIChatWidget() {
                 return;
             }
 
+            const history = getChatHistory();
+
             if (intent) {
-                const response = await runAction(intent, userMsg, context);
+                // Structured handlers fetch real data → beanllm converts to natural language
+                const rawData = await runAction(intent, userMsg, context);
+                const response = await callBeanLLM(userMsg, context, rawData, history);
                 streamAssistantMessage(response);
             } else {
-                streamAssistantMessage(getFallbackMessage(context));
+                // No recognized intent → let beanllm handle directly
+                const response = await callBeanLLM(userMsg, context, null, history);
+                streamAssistantMessage(response || getFallbackMessage(context));
             }
         } catch {
             setMessages(prev => [...prev, createMsg('assistant', '요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.')]);
         } finally {
             setIsLoading(false);
         }
-    }, [input, isLoading, streamAssistantMessage]);
+    }, [input, isLoading, userLocation, getChatHistory, streamAssistantMessage]);
 
     const clearChat = () => {
         setMessages([createMsg('assistant', '대화가 초기화되었습니다. 무엇을 도와드릴까요?')]);
@@ -311,14 +362,37 @@ export default function AIChatWidget() {
             {/* Input */}
             <div className="px-3 py-3 flex-shrink-0 bg-white" style={{ borderTop: '1px solid #E8EBF0', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
                 <div className="flex items-center gap-2">
+                    {/* 이미지 첨부 버튼 */}
+                    <button
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={isLoading}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-40"
+                        style={{ background: '#F4F4F5' }}
+                        title="사진으로 장소 찾기"
+                    >
+                        <HiOutlinePhoto className="w-4 h-4" style={{ color: '#71717A' }} />
+                    </button>
+                    <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file);
+                            e.target.value = '';
+                        }}
+                    />
                     <div className="relative flex-1">
                         <input
                             ref={inputRef}
                             type="text"
                             value={input}
+                            maxLength={500}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
                             placeholder="무엇이든 물어보세요..."
+                            aria-label="AI 채팅 입력"
                             disabled={isLoading}
                             className="w-full px-4 py-2.5 rounded-xl text-[13px] transition-all disabled:opacity-60"
                             style={{
