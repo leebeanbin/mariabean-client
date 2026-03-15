@@ -23,6 +23,7 @@ export default function MobileTabBar() {
     return (
         <nav
             className="lg:hidden fixed bottom-0 left-0 right-0 z-50 safe-area-bottom"
+            aria-label="하단 탐색 메뉴"
             style={{
                 background: 'rgba(252,252,253,0.92)',
                 backdropFilter: 'blur(12px)',
@@ -30,7 +31,7 @@ export default function MobileTabBar() {
                 boxShadow: '0 -1px 0 rgba(24,24,27,0.04)',
             }}
         >
-            <div className="flex items-center h-14">
+            <div className="flex items-center h-14" role="list">
                 {NAV_ITEMS.map(({ href, mobileLabel }) => {
                     const icons = tabIcons[href];
                     const Icon = icons.icon;
@@ -40,6 +41,9 @@ export default function MobileTabBar() {
                         <Link
                             key={href}
                             href={href}
+                            role="listitem"
+                            aria-label={mobileLabel}
+                            aria-current={isActive ? 'page' : undefined}
                             className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full"
                         >
                             {isActive

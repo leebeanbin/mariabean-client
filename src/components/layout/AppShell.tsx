@@ -1,9 +1,11 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import MobileTabBar from './MobileTabBar';
-import AIChatWidget from '@/components/ai/AIChatWidget';
+
+const AIChatWidget = dynamic(() => import('@/components/ai/AIChatWidget'), { ssr: false });
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
