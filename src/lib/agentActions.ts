@@ -319,6 +319,32 @@ export async function executeCancelReservation(reservationId: string): Promise<s
     } catch { return `예약 #${reservationId} 취소에 실패했습니다.`; }
 }
 
+// ── BeanLLM call ──────────────────────────────────────────────────────────────
+
+export interface ChatHistoryEntry {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+export async function callBeanLLM(
+    message: string,
+    context: AgentContext,
+    dataContext: string | null,
+    history: ChatHistoryEntry[],
+): Promise<string> {
+    try {
+        const res = await fetch('/api/agent/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, context, dataContext, history }),
+        });
+        const data = await res.json();
+        return data?.content ?? '';
+    } catch {
+        return '';
+    }
+}
+
 export function getFallbackMessage(context: AgentContext): string {
     const contextualTips: string[] = [];
     if (context.currentPage.includes('/facilities/')) {
