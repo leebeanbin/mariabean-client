@@ -548,15 +548,18 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
                 </div>
             )}
 
-            {/* 비로그인 유도 배너 */}
+            {/* 비로그인 유도 배너 — 챗봇 다크 배경(#18181B)에 맞춘 accent 톤 */}
             {!isAuthenticated && (
                 <button
                     onClick={() => setShowModal(true)}
                     className="mx-3 mb-2 flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl w-[calc(100%-24px)] text-left transition-opacity active:opacity-70"
-                    style={{ background: 'rgba(94,106,210,0.08)', border: '1px solid rgba(94,106,210,0.2)' }}
+                    style={{
+                        background: 'rgba(94,106,210,0.12)',
+                        border: '1px solid rgba(94,106,210,0.25)',
+                    }}
                 >
-                    <HiOutlineSparkles className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#5E6AD2' }} />
-                    <span className="text-[11px] font-medium" style={{ color: '#5E6AD2' }}>
+                    <HiOutlineSparkles className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A5B4FC' }} />
+                    <span className="text-[11px] font-medium" style={{ color: '#A5B4FC' }}>
                         로그인하면 AI 요약·인용·개인 메모가 활성화돼요
                     </span>
                 </button>
