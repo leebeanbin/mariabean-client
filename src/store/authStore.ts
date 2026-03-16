@@ -50,6 +50,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     login: (accessToken, refreshToken, email, memberId) => {
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
+        // middleware가 읽을 수 있도록 쿠키에도 동기화 (Edge Runtime은 localStorage 접근 불가)
+        const payload = decodeJwtPayload(accessToken);
+        const exp = typeof payload.exp === 'number' ? payload.exp - Math.floor(Date.now() / 1000) : 3600;
+        document.cookie = `accessToken=${accessToken}; path=/; max-age=${exp}; SameSite=Lax`;
         const userRole = extractRole(accessToken);
         set({
             isAuthenticated: true,
@@ -66,6 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         api.post('/api/v1/auth/logout').catch(() => {});
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax';
         set({
             isAuthenticated: false,
             accessToken: null,
@@ -80,6 +85,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         if (typeof window !== 'undefined') {
             const token = localStorage.getItem('accessToken');
             if (token && !isTokenExpired(token)) {
+                // 쿠키와 localStorage 동기화 (탭 복귀·새로고침 시)
+                const payload = decodeJwtPayload(token);
+                const exp = typeof payload.exp === 'number' ? payload.exp - Math.floor(Date.now() / 1000) : 3600;
+                document.cookie = `accessToken=${token}; path=/; max-age=${exp}; SameSite=Lax`;
                 const userRole = extractRole(token);
                 set({
                     isAuthenticated: true,
@@ -92,6 +101,7 @@ export const useAuthStore = create<AuthState>((set) => ({
                 if (token) {
                     localStorage.removeItem('accessToken');
                     localStorage.removeItem('refreshToken');
+                    document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax';
                 }
                 set({ isHydrated: true });
             }

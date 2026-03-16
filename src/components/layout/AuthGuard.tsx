@@ -7,20 +7,20 @@ import { useAuthStore } from '@/store/authStore';
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const { hydrate, isAuthenticated, isHydrated } = useAuthStore();
     const router = useRouter();
-    const isDevBypass = process.env.NODE_ENV === 'development';
 
     useEffect(() => {
         hydrate();
     }, [hydrate]);
 
     useEffect(() => {
-        if (isHydrated && !isDevBypass && !isAuthenticated) {
-            router.replace('/login');
+        if (isHydrated && !isAuthenticated) {
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+            router.replace(`/login?returnUrl=${returnUrl}`);
         }
-    }, [isAuthenticated, isHydrated, isDevBypass, router]);
+    }, [isAuthenticated, isHydrated, router]);
 
     if (!isHydrated) return <div style={{ minHeight: '100dvh' }} />;
-    if (!isDevBypass && !isAuthenticated) return null;
+    if (!isAuthenticated) return null;
 
     return <>{children}</>;
 }
