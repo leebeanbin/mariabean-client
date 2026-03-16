@@ -368,16 +368,12 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
 
     /* ── 채팅 패널 공통 내용 ── */
     const chatContent = (
-        <div className="flex flex-col h-full overflow-hidden" style={{ background: '#18181B' }}>
+        <div className="flex flex-col h-full overflow-hidden" style={{ background: '#FFFFFF' }}>
             {/* Header */}
             <div
-                className="px-5 py-4 flex items-center gap-3.5 flex-shrink-0 relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #18181B 0%, #1E293B 100%)' }}
+                className="px-5 py-4 flex items-center gap-3.5 flex-shrink-0"
+                style={{ background: '#FFFFFF', borderBottom: '1px solid #E4E4E7' }}
             >
-                <div
-                    className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-10"
-                    style={{ background: 'radial-gradient(circle, #5E6AD2 0%, transparent 70%)' }}
-                />
                 <div className="relative">
                     <div
                         className="w-10 h-10 rounded-2xl flex items-center justify-center"
@@ -387,18 +383,18 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
                     </div>
                     <span
                         className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
-                        style={{ background: '#22C55E', borderColor: '#18181B' }}
+                        style={{ background: '#22C55E', borderColor: '#FFFFFF' }}
                     />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-bold text-white tracking-tight">MariBean AI</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>운영 어시스턴트 · 항상 온라인</p>
+                    <p className="text-[15px] font-bold tracking-tight" style={{ color: '#18181B' }}>MariBean AI</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: '#71717A' }}>어시스턴트 · 항상 온라인</p>
                 </div>
                 <div className="flex items-center gap-1">
                     <button
                         onClick={clearChat}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                        style={{ color: 'rgba(255,255,255,0.35)' }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
+                        style={{ color: '#A1A1AA' }}
                         title="대화 초기화"
                     >
                         <HiOutlineTrash className="w-4 h-4" />
@@ -406,8 +402,8 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
                     <button
                         ref={closeButtonRef}
                         onClick={() => setIsOpen(false)}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                        style={{ color: 'rgba(255,255,255,0.35)' }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
+                        style={{ color: '#A1A1AA' }}
                         aria-label="AI 챗 닫기"
                     >
                         <HiOutlineXMark className="w-5 h-5" />
@@ -548,18 +544,18 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
                 </div>
             )}
 
-            {/* 비로그인 유도 배너 — 챗봇 다크 배경(#18181B)에 맞춘 accent 톤 */}
+            {/* 비로그인 유도 배너 */}
             {!isAuthenticated && (
                 <button
                     onClick={() => setShowModal(true)}
                     className="mx-3 mb-2 flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl w-[calc(100%-24px)] text-left transition-opacity active:opacity-70"
                     style={{
-                        background: 'rgba(94,106,210,0.12)',
-                        border: '1px solid rgba(94,106,210,0.25)',
+                        background: 'rgba(94,106,210,0.08)',
+                        border: '1px solid rgba(94,106,210,0.18)',
                     }}
                 >
-                    <HiOutlineSparkles className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A5B4FC' }} />
-                    <span className="text-[11px] font-medium" style={{ color: '#A5B4FC' }}>
+                    <HiOutlineSparkles className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#5E6AD2' }} />
+                    <span className="text-[11px] font-medium" style={{ color: '#5E6AD2' }}>
                         로그인하면 AI 요약·인용·개인 메모가 활성화돼요
                     </span>
                 </button>
@@ -726,16 +722,17 @@ export default function AIChatWidget({ mode = 'admin' }: AIChatWidgetProps) {
                     className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative"
                     style={{
                         background: isOpen
-                            ? '#27272A'
+                            ? '#F4F4F5'
                             : 'linear-gradient(135deg, #5E6AD2 0%, #7C3AED 100%)',
                         boxShadow: isOpen
-                            ? '0 4px 16px rgba(0,0,0,0.25)'
+                            ? '0 2px 8px rgba(0,0,0,0.10)'
                             : '0 8px 28px rgba(94,106,210,0.45)',
+                        border: isOpen ? '1px solid #E4E4E7' : 'none',
                     }}
                 >
                     <span className={`transition-all duration-300 ${isOpen ? 'rotate-90 scale-90' : 'rotate-0 scale-100'}`}>
                         {isOpen
-                            ? <HiOutlineXMark className="w-6 h-6 text-white" />
+                            ? <HiOutlineXMark className="w-6 h-6" style={{ color: '#52525B' }} />
                             : <HiOutlineSparkles className="w-6 h-6 text-white" />
                         }
                     </span>
