@@ -3,6 +3,8 @@
 Next.js 기반 공간·의료 예약 플랫폼 프론트엔드입니다.
 Google/Kakao OAuth2 인증, 병원 지능형 검색(증상·진료과·자연어), 지도 통합, AI 챗봇 위젯을 포함합니다.
 
+> **관련 레포**: [mariabean (백엔드)](https://github.com/leebeanbin/mariabean) — Spring Boot 3 + MongoDB + Elasticsearch + Kafka
+
 ---
 
 ## 기술 스택
@@ -135,6 +137,7 @@ src/app/
 ```env
 # 백엔드 API
 NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080   # AI Research 훅에서 사용
 
 # Kakao Maps JS SDK
 NEXT_PUBLIC_KAKAO_MAP_KEY=
@@ -144,10 +147,14 @@ NEXT_PUBLIC_KAKAO_REST_API_KEY=
 
 # Google Maps JS API
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+
+# OpenWeatherMap (AI 챗봇 날씨 기능, 선택)
+NEXT_PUBLIC_OPENWEATHER_KEY=
 ```
 
 > `NEXT_PUBLIC_KAKAO_MAP_KEY` 하나만 있어도 지도·병원 검색 동작합니다.
 > Google Maps 키가 없으면 Google 지도 전환과 Geocoder fallback이 비활성화됩니다.
+> `NEXT_PUBLIC_OPENWEATHER_KEY` 없이도 동작하지만 AI 챗봇의 날씨 기능이 비활성화됩니다.
 
 ---
 
@@ -173,4 +180,25 @@ npm run build
 npm run lint
 ```
 
-백엔드(`mariabean`)가 `localhost:8080`에서 실행 중이어야 합니다.
+백엔드([mariabean](https://github.com/leebeanbin/mariabean))가 `localhost:8080`에서 실행 중이어야 합니다.
+
+---
+
+## 배포
+
+### Vercel (권장)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/leebeanbin/mariabean-client)
+
+1. Vercel 대시보드에서 이 레포지토리 연결
+2. **Environment Variables** 탭에서 위 `.env.local` 항목 입력
+3. **Deploy** 클릭
+
+> 백엔드가 공개 URL에 배포된 경우 `NEXT_PUBLIC_API_URL`을 해당 주소로 변경하세요.
+
+### 수동 빌드
+
+```bash
+npm run build
+npm start          # http://localhost:3000
+```
